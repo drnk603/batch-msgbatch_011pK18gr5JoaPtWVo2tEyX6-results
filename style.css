@@ -553,7 +553,6 @@ ul, ol {
   padding: var(--space-lg);
   display: flex;
   flex-direction: column;
-  height: 100%;
   transition: all var(--transition-base) var(--ease-out);
   border: none;
   overflow: hidden;
