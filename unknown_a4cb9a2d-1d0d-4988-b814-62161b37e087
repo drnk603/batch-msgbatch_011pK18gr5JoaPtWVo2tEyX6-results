@@ -1,0 +1,481 @@
+{
+  'use strict';
+
+  if (window.__app) return;
+
+  var app = window.__app = {
+    initialized: false,
+    aosReady: false,
+    burgerReady: false,
+    anchorReady: false,
+    activeMenuReady: false,
+    imagesReady: false,
+    formsReady: false,
+    animeReady: false,
+    flexGapReady: false
+  };
+
+  function debounce(fn, delay) {
+    var timer = null;
+    return function() {
+      var ctx = this, args = arguments;
+      clearTimeout(timer);
+      timer = setTimeout(function() {
+        fn.apply(ctx, args);
+      }, delay);
+    };
+  }
+
+  function throttle(fn, delay) {
+    var last = 0;
+    return function() {
+      var now = Date.now();
+      if (now - last >= delay) {
+        last = now;
+        fn.apply(this, arguments);
+      }
+    };
+  }
+
+  function initAOS() {
+    if (app.aosReady) return;
+    app.aosReady = true;
+
+    if (typeof AOS === 'undefined') return;
+
+    var avoidElements = document.querySelectorAll('[data-aos][data-avoid-layout="true"]');
+    for (var i = 0; i < avoidElements.length; i++) {
+      avoidElements[i].removeAttribute('data-aos');
+    }
+
+    AOS.init({
+      once: false,
+      duration: 600,
+      easing: 'ease-out',
+      offset: 120,
+      mirror: false,
+      disable: function() {
+        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      }
+    });
+
+    app.refreshAOS = function() {
+      try {
+        if (typeof AOS !== 'undefined' && AOS.refresh) {
+          AOS.refresh();
+        }
+      } catch (e) {}
+    };
+  }
+
+  function initBurgerMenu() {
+    if (app.burgerReady) return;
+    app.burgerReady = true;
+
+    var nav = document.querySelector('.c-nav#main-nav');
+    var toggle = document.querySelector('.c-nav__toggle');
+    var navList = document.querySelector('.c-nav__list');
+    var body = document.body;
+
+    if (!nav || !toggle || !navList) return;
+
+    var focusableEls = null;
+    var firstFocusable = null;
+    var lastFocusable = null;
+
+    function updateFocusableElements() {
+      focusableEls = navList.querySelectorAll('a[href], button, [tabindex]:not([tabindex="-1"])');
+      if (focusableEls.length > 0) {
+        firstFocusable = focusableEls[0];
+        lastFocusable = focusableEls[focusableEls.length - 1];
+      }
+    }
+
+    function openMenu() {
+      nav.classList.add('is-open');
+      toggle.setAttribute('aria-expanded', 'true');
+      body.classList.add('u-no-scroll');
+      updateFocusableElements();
+      if (firstFocusable) {
+        setTimeout(function() {
+          firstFocusable.focus();
+        }, 100);
+      }
+    }
+
+    function closeMenu() {
+      nav.classList.remove('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+      body.classList.remove('u-no-scroll');
+      toggle.focus();
+    }
+
+    function isOpen() {
+      return nav.classList.contains('is-open');
+    }
+
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (isOpen()) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (!isOpen()) return;
+
+      if (e.key === 'Escape' || e.keyCode === 27) {
+        closeMenu();
+      }
+
+      if (e.key === 'Tab' || e.keyCode === 9) {
+        if (!focusableEls || focusableEls.length === 0) return;
+
+        if (e.shiftKey) {
+          if (document.activeElement === firstFocusable) {
+            e.preventDefault();
+            lastFocusable.focus();
+          }
+        } else {
+          if (document.activeElement === lastFocusable) {
+            e.preventDefault();
+            firstFocusable.focus();
+          }
+        }
+      }
+    });
+
+    document.addEventListener('click', function(e) {
+      if (!isOpen()) return;
+      if (!nav.contains(e.target) && e.target !== toggle) {
+        closeMenu();
+      }
+    });
+
+    var navLinks = document.querySelectorAll('.c-nav__link');
+    for (var i = 0; i < navLinks.length; i++) {
+      navLinks[i].addEventListener('click', function() {
+        if (isOpen()) {
+          closeMenu();
+        }
+      });
+    }
+
+    var resizeHandler = debounce(function() {
+      if (window.innerWidth >= 1024 && isOpen()) {
+        closeMenu();
+      }
+    }, 150);
+
+    window.addEventListener('resize', resizeHandler);
+  }
+
+  function initAnchors() {
+    if (app.anchorReady) return;
+    app.anchorReady = true;
+
+    var currentPath = window.location.pathname;
+    var isHomePage = currentPath === '/' || currentPath === '/index.html' || currentPath.endsWith('/');
+
+    if (!isHomePage) {
+      var links = document.querySelectorAll('a[href^="#"]');
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute('href');
+        if (href && href.length > 1 && href !== '#' && href !== '#!') {
+          var sectionId = href.substring(1);
+          var targetExists = document.getElementById(sectionId);
+          if (!targetExists) {
+            links[i].setAttribute('href', '/' + href);
+          }
+        }
+      }
+    }
+
+    document.addEventListener('click', function(e) {
+      var target = e.target;
+      while (target && target.tagName !== 'A') {
+        target = target.parentElement;
+      }
+
+      if (!target || target.tagName !== 'A') return;
+
+      var href = target.getAttribute('href');
+      if (!href || href === '#' || href === '#!') return;
+
+      if (href.indexOf('#') === 0) {
+        var sectionId = href.substring(1);
+        var section = document.getElementById(sectionId);
+        if (section) {
+          e.preventDefault();
+          smoothScrollTo(section);
+        }
+      } else if (href.indexOf('/#') === 0 && isHomePage) {
+        var homeSectionId = href.substring(2);
+        var homeSection = document.getElementById(homeSectionId);
+        if (homeSection) {
+          e.preventDefault();
+          smoothScrollTo(homeSection);
+        }
+      }
+    });
+
+    function smoothScrollTo(element) {
+      var header = document.querySelector('.l-header');
+      var headerHeight = header ? header.offsetHeight : 80;
+      var elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
+      var offsetPosition = elementPosition - headerHeight;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  function initActiveMenu() {
+    if (app.activeMenuReady) return;
+    app.activeMenuReady = true;
+
+    var currentPath = window.location.pathname;
+    var isHomePage = currentPath === '/' || currentPath === '/index.html' || currentPath.endsWith('/');
+    var navLinks = document.querySelectorAll('.c-nav__link');
+
+    for (var i = 0; i < navLinks.length; i++) {
+      var link = navLinks[i];
+      var href = link.getAttribute('href');
+
+      link.removeAttribute('aria-current');
+      link.classList.remove('active');
+
+      if (isHomePage && (href === '/' || href === '/index.html' || href === './index.html')) {
+        link.setAttribute('aria-current', 'page');
+        link.classList.add('active');
+      } else if (!isHomePage && href && currentPath.indexOf(href) !== -1 && href !== '/') {
+        link.setAttribute('aria-current', 'page');
+        link.classList.add('active');
+      }
+    }
+  }
+
+  function initImages() {
+    if (app.imagesReady) return;
+    app.imagesReady = true;
+
+    var images = document.querySelectorAll('img');
+
+    for (var i = 0; i < images.length; i++) {
+      var img = images[i];
+
+      if (!img.hasAttribute('loading')) {
+        var isLogo = img.classList.contains('c-logo__img');
+        var isCritical = img.hasAttribute('data-critical');
+        if (!isLogo && !isCritical) {
+          img.setAttribute('loading', 'lazy');
+        }
+      }
+
+      if (!img.classList.contains('img-fluid')) {
+        img.classList.add('img-fluid');
+      }
+
+      img.addEventListener('error', function(e) {
+        var failedImg = e.target;
+        var isHeaderLogo = failedImg.classList.contains('c-logo__img');
+
+        var svgPlaceholder = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"%3E%3Crect fill="%23e9ecef" width="200" height="200"/%3E%3Ctext x="50%25" y="50%25" fill="%236c757d" font-family="sans-serif" font-size="14" text-anchor="middle" dominant-baseline="middle"%3EImage%3C/text%3E%3C/svg%3E';
+
+        failedImg.src = svgPlaceholder;
+        failedImg.style.objectFit = 'contain';
+
+        if (isHeaderLogo) {
+          failedImg.style.maxHeight = '40px';
+        }
+      });
+    }
+  }
+
+  function initForms() {
+    if (app.formsReady) return;
+    app.formsReady = true;
+
+    var forms = document.querySelectorAll('.needs-validation');
+
+    app.notify = function(message, type) {
+      var container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;max-width:350px;';
+        document.body.appendChild(container);
+      }
+
+      var alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+      var toast = document.createElement('div');
+      toast.className = 'alert ' + alertClass + ' alert-dismissible fade show';
+      toast.setAttribute('role', 'alert');
+      toast.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+
+      container.appendChild(toast);
+
+      setTimeout(function() {
+        toast.classList.remove('show');
+        setTimeout(function() {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+        }, 150);
+      }, 5000);
+    };
+
+    for (var i = 0; i < forms.length; i++) {
+      forms[i].addEventListener('submit', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var form = e.target;
+        form.classList.add('was-validated');
+
+        if (!form.checkValidity()) {
+          return;
+        }
+
+        var submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          var originalText = submitBtn.innerHTML;
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Wird gesendet...';
+
+          var formData = new FormData(form);
+          var data = {};
+          formData.forEach(function(value, key) {
+            data[key] = value;
+          });
+
+          fetch('process.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+          })
+          .then(function(response) {
+            return response.json();
+          })
+          .then(function(result) {
+            if (result.success) {
+              app.notify('Ihre Nachricht wurde erfolgreich gesendet!', 'success');
+              form.reset();
+              form.classList.remove('was-validated');
+            } else {
+              app.notify('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
+            }
+          })
+          .catch(function() {
+            app.notify('Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut.', 'error');
+          })
+          .finally(function() {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+          });
+        }
+      });
+    }
+  }
+
+  function initAnimeInteractions() {
+    if (app.animeReady) return;
+    app.animeReady = true;
+
+    if (typeof anime === 'undefined') return;
+
+    var selectors = ['.card', '.feature-card', '.animal-card', '.btn-primary', '.btn-success'];
+    var elements = [];
+
+    for (var i = 0; i < selectors.length; i++) {
+      var found = document.querySelectorAll(selectors[i]);
+      for (var j = 0; j < found.length; j++) {
+        elements.push(found[j]);
+      }
+    }
+
+    for (var k = 0; k < elements.length; k++) {
+      (function(el) {
+        el.addEventListener('mouseenter', function() {
+          anime({
+            targets: el,
+            scale: 1.03,
+            opacity: 0.95,
+            duration: 300,
+            easing: 'easeOutQuad'
+          });
+        });
+
+        el.addEventListener('mouseleave', function() {
+          anime({
+            targets: el,
+            scale: 1,
+            opacity: 1,
+            duration: 300,
+            easing: 'easeOutQuad'
+          });
+        });
+      })(elements[k]);
+    }
+  }
+
+  function initFlexGaps() {
+    if (app.flexGapReady) return;
+    app.flexGapReady = true;
+
+    function applyFlexGaps() {
+      var isMobile = window.innerWidth < 576;
+      var flexContainers = document.querySelectorAll('.d-flex');
+
+      for (var i = 0; i < flexContainers.length; i++) {
+        var container = flexContainers[i];
+        var children = Array.prototype.slice.call(container.children);
+        var visibleChildren = children.filter(function(child) {
+          return child.offsetParent !== null;
+        });
+
+        var hasGapClass = container.className.match(/\b(gap-[0-5]|g-[0-5])\b/);
+
+        if (isMobile && visibleChildren.length > 1 && !hasGapClass) {
+          container.classList.add('gap-3');
+          container.setAttribute('data-mobile-gap-added', 'true');
+        } else if (!isMobile && container.getAttribute('data-mobile-gap-added') === 'true') {
+          container.classList.remove('gap-3');
+          container.removeAttribute('data-mobile-gap-added');
+        }
+      }
+    }
+
+    applyFlexGaps();
+
+    var resizeHandler = debounce(applyFlexGaps, 200);
+    window.addEventListener('resize', resizeHandler);
+  }
+
+  app.init = function() {
+    if (app.initialized) return;
+    app.initialized = true;
+
+    initAOS();
+    initBurgerMenu();
+    initAnchors();
+    initActiveMenu();
+    initImages();
+    initForms();
+    initAnimeInteractions();
+    initFlexGaps();
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', app.init);
+  } else {
+    app.init();
+  }
+}
